@@ -89,9 +89,9 @@ INSTALL_IDENTITY_PROVIDER=0
 
 ### Option variables ###
 PROJECT_ID="${PROJECT_ID:=}" #PROJECT_ID is the environ project id
-VM_PROJECT_ID=${VM_PROJECT_ID:=}"
-VM_NETWORK="projects/yinjie-vpc-host-proj/global/networks/singlenetwork"
-VM_SUBNETWORK="projects/yinjie-vpc-host-proj/regions/us-central1/subnetworks/subnet1"
+VM_PROJECT_ID="${VM_PROJECT_ID:=}"
+VM_NETWORK=""
+VM_SUBNETWORK="${VM_SUBNETWORK:=}"
 CLUSTER_NAME="${CLUSTER_NAME:=}"
 CLUSTER_LOCATION="${CLUSTER_LOCATION:=}"
 SOURCE_INSTANCE_TEMPLATE="${SOURCE_INSTANCE_TEMPLATE:=}"
@@ -335,6 +335,7 @@ OPTIONS:
                                                       cluster.
   -p|--project_id               <ID>                  The GCP project ID.
   -vmp|--vm_project_id          <VM_PROJECT_ID>       The GCP VM project ID.
+  -vn|--vm_sub_network          <VM_SUBNETWORK>       The sub network for GCE VM.
   -w|--workload_name            <WORKLOAD_NAME>       The name of the
                                                       WorkloadGroup for GCE VM
                                                       workloads.
@@ -491,6 +492,16 @@ parse_args_create_gce_instance_template() {
       -p | --project_id | --project-id)
         arg_required "${@}"
         PROJECT_ID="${2}"
+        shift 2
+        ;;
+      -vmp | --vm_project_id | --vm-project-id)
+        arg_required "${@}"
+        VM_PROJECT_ID="${2}"
+        shift 2
+        ;;
+      -vn | --vm_sub_network | --vm-sub-network)
+        arg_required "${@}"
+        VM_SUBNETWORK="${2}"
         shift 2
         ;;
       -i | --source_instance_template | --source-instance-template)
@@ -1766,6 +1777,11 @@ main() {
 
   if [[ -n "${SERVICE_ACCOUNT}" ]]; then
     auth_service_account
+  fi
+
+  # If VM project is not set, choose the same project as the ASM control plane.
+  if [[ -z "${VM_PROJECT_ID}" ]]; then
+    VM_PROJECT_ID=${PROJECT_ID}
   fi
 
   validate_dependencies
