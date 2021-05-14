@@ -88,7 +88,10 @@ INSTALL_EXPANSION_GATEWAY=0
 INSTALL_IDENTITY_PROVIDER=0
 
 ### Option variables ###
-PROJECT_ID="${PROJECT_ID:=}"
+PROJECT_ID="${PROJECT_ID:=}" #PROJECT_ID is the environ project id
+VM_PROJECT_ID=${VM_PROJECT_ID:=}"
+VM_NETWORK="projects/yinjie-vpc-host-proj/global/networks/singlenetwork"
+VM_SUBNETWORK="projects/yinjie-vpc-host-proj/regions/us-central1/subnetworks/subnet1"
 CLUSTER_NAME="${CLUSTER_NAME:=}"
 CLUSTER_LOCATION="${CLUSTER_LOCATION:=}"
 SOURCE_INSTANCE_TEMPLATE="${SOURCE_INSTANCE_TEMPLATE:=}"
@@ -331,6 +334,7 @@ OPTIONS:
   -n|--cluster_name             <NAME>                The name of the target
                                                       cluster.
   -p|--project_id               <ID>                  The GCP project ID.
+  -vmp|--vm_project_id          <VM_PROJECT_ID>       The GCP VM project ID.
   -w|--workload_name            <WORKLOAD_NAME>       The name of the
                                                       WorkloadGroup for GCE VM
                                                       workloads.
@@ -660,6 +664,8 @@ validate_dependencies() {
   validate_project
   PROJECT_NUMBER="$(gcloud projects describe "${PROJECT_ID}" \
     --format="value(projectNumber)")"
+  VM_PROJECT_NUMBER="$(gcloud projects describe "${VM_PROJECT_ID}" \
+    --format="value(projectNumber)")"
   GKE_URL=\
 "//container.googleapis.com/projects/${PROJECT_ID}/locations/${CLUSTER_LOCATION}/clusters/${CLUSTER_NAME}"
   readonly GKE_URL
@@ -729,6 +735,20 @@ validate_project() {
   if [[ -z "${RESULT}" ]]; then
     { read -r -d '' MSG; fatal "${MSG}"; } <<EOF
 Unable to find project ${PROJECT_ID}. Please verify the spelling and try
+again. To see a list of your projects, run:
+  gcloud projects list --format='value(project_id)'
+EOF
+  fi
+
+  info "Checking for ${VM_PROJECT_ID}..."
+  RESULT=$(gcloud projects list \
+    --filter="project_id=${VM_PROJECT_ID}" \
+    --format="value(project_id)" \
+    || true)
+
+  if [[ -z "${RESULT}" ]]; then
+    { read -r -d '' MSG; fatal "${MSG}"; } <<EOF
+Unable to find project ${VM_PROJECT_ID}. Please verify the spelling and try
 again. To see a list of your projects, run:
   gcloud projects list --format='value(project_id)'
 EOF
@@ -816,16 +836,16 @@ validate_asm_installation() {
 
   if [[ "${AUTOREGISTRATION_ENABLED}" -eq 0 ]]; then
     { read -r -d '' MSG; fatal "${MSG}"; } <<EOF || true
-VM auto-registration is not enabled in any of your ASM ${ASM_RELEASE}
-installations in the cluster. Please install ASM and make sure none of the
-values set in your custom overlay override the default values.
+VM auto-registration is not enabled in any of your ASM installations in the
+cluster. Please install ASM and make sure none of the values set in your custom
+overlay overrides the default values.
 EOF
   fi
 
   if [[ "${ENVIRON_WORKLOAD_IDENTITY_USED}" -eq 0 ]]; then
     { read -r -d '' MSG; fatal "${MSG}"; } <<EOF || true
-The environ workload identity is not used in any of your ASM ${ASM_RELEASE}
-installation in the cluster. Please install ASM with VM support.
+The environ workload identity is not used in any of your ASM installation in the
+cluster. Please install ASM with VM support.
 EOF
   fi
 
@@ -1039,16 +1059,17 @@ validate_workload_asm_revision() {
 
   if [[ -z "${ASM_REVISIONS["${WORKLOAD_ASM_REVISION}"]-}" ]]; then
     { read -r -d '' MSG; fatal "${MSG}"; } <<EOF || true
-ASM revision ${WORKLOAD_ASM_REVISION} for the workload is not found in any ASM
-${ASM_RELEASE} installation in the cluster. Please verify the value of
-${ASM_REVISION_LABEL_KEY} label on namespace ${WORKLOAD_NAMESPACE} and try again.
+ASM revision ${WORKLOAD_ASM_REVISION} for the workload is not found in the
+cluster. Please verify the value of ${ASM_REVISION_LABEL_KEY} label on namespace
+${WORKLOAD_NAMESPACE} and try again.
 EOF
   fi
 
   if ! uses_environ_workload_identity "${WORKLOAD_ASM_REVISION}"; then
     { read -r -d '' MSG; fatal "${MSG}"; } <<EOF || true
 ASM revision ${WORKLOAD_ASM_REVISION} for the workload is not using Environ
-workload identity. Please install ASM with VM support.
+workload identity. Please make sure "--option hub-meshca" is included when you
+use the install_asm script.
 EOF
   fi
 }
@@ -1058,7 +1079,7 @@ validate_workload_service_account() {
 
   local RESULT; RESULT=""
   RESULT="$(gcloud iam service-accounts list \
-    --project="${PROJECT_ID}" \
+    --project="${VM_PROJECT_ID}" \
     --filter="email = ${WORKLOAD_SERVICE_ACCOUNT}" \
     --format="value(name)" || true)"
   if [[ -z "${RESULT}" ]]; then
@@ -1066,7 +1087,7 @@ validate_workload_service_account() {
 Unable to find ${WORKLOAD_SERVICE_ACCOUNT} in the project.
 Please verify the spelling in the WorkloadGroup and try again.
 To see a list of your service accounts, in this project, run:
-  gcloud iam service-accounts list --format='value(email)' --project="${PROJECT_ID}"
+  gcloud iam service-accounts list --format='value(email)' --project="${VM_PROJECT_ID}"
 EOF
   fi
 }
@@ -1078,7 +1099,7 @@ validate_gce_instance_template() {
 
   if [[ -n "${NEW_INSTANCE_TEMPLATE}" ]]; then
     RESULT="$(gcloud compute instance-templates list \
-      --project="${PROJECT_ID}" \
+      --project="${VM_PROJECT_ID}" \
       --filter="name~^${NEW_INSTANCE_TEMPLATE}$" \
       --format="value(name)" || true)"
     if [[ -n "${RESULT}" ]]; then
@@ -1088,14 +1109,14 @@ Please choose a different name and try again. To see a list of your instance tem
 this project, run:
   gcloud compute instance-templates list \
   --format='value(name)' \
-  --project="${PROJECT_ID}"
+  --project="${VM_PROJECT_ID}"
 EOF
     fi
   fi
 
   if [[ -n "${SOURCE_INSTANCE_TEMPLATE}" ]]; then
     RESULT="$(gcloud compute instance-templates list \
-      --project="${PROJECT_ID}" \
+      --project="${VM_PROJECT_ID}" \
       --filter="name~^${SOURCE_INSTANCE_TEMPLATE}$" \
       --format="value(name)" || true)"
     if [[ -z "${RESULT}" ]]; then
@@ -1105,7 +1126,7 @@ Please verify the spelling and try again. To see a list of your instance templat
 this project, run:
   gcloud compute instance-templates list \
   --format='value(name)' \
-  --project="${PROJECT_ID}"
+  --project="${VM_PROJECT_ID}"
 EOF
     fi
 
@@ -1113,7 +1134,7 @@ EOF
     SOURCE_IMAGE_PATH="$(retry 2 run gcloud compute instance-templates \
       describe "${SOURCE_INSTANCE_TEMPLATE}" \
       --format=json \
-      --project="${PROJECT_ID}" \
+      --project="${VM_PROJECT_ID}" \
       | jq '.properties.disks[0].initializeParams.sourceImage')"
 
     if [[ "${SOURCE_IMAGE_PATH}" == *projects/*-cloud/global/images* ]]; then
@@ -1128,7 +1149,7 @@ EOF
     INSTANCE_TEMPLATE_SERVICE_ACCOUNT="$(gcloud compute instance-templates \
       describe "${SOURCE_INSTANCE_TEMPLATE}" \
       --format="value(properties.serviceAccounts[0].email)" \
-      --project="${PROJECT_ID}" || true)"
+      --project="${VM_PROJECT_ID}" || true)"
     if [[ -z "${INSTANCE_TEMPLATE_SERVICE_ACCOUNT}" ]]; then
       { read -r -d '' MSG; fatal "${MSG}"; } <<EOF || true
 The GCE instance template ${SOURCE_INSTANCE_TEMPLATE} does not use a service
@@ -1264,6 +1285,17 @@ retrieve_cluster_network() {
     --zone="${CLUSTER_LOCATION}" \
     --project="${PROJECT_ID}" \
     --format="value(network)")"
+
+  VM_NETWORK="$(retry 2 run gcloud container clusters describe "${CLUSTER_NAME}" \
+    --zone="${CLUSTER_LOCATION}" \
+    --project="${PROJECT_ID}" \
+    --format="value(networkConfig.network)")"
+  if [[ -z "${VM_SUBNETWORK}" ]]; then
+      VM_SUBNETWORK="$(retry 2 run gcloud container clusters describe "${CLUSTER_NAME}" \
+        --zone="${CLUSTER_LOCATION}" \
+        --project="${PROJECT_ID}" \
+        --format="value(networkConfig.subnetwork)")"
+  fi
 }
 
 retrieve_identity_provider() {
@@ -1440,6 +1472,8 @@ gen_gce_instance_labels() {
 gen_default_instance_template() {
   jq -n \
   --arg project_id "${PROJECT_ID}" \
+  --arg vm_network "${VM_NETWORK}" \
+  --arg vm_subnetwork "${VM_SUBNETWORK}" \
   --arg project_number "${PROJECT_NUMBER}" \
   --arg service_account "${WORKLOAD_SERVICE_ACCOUNT}" \
   --arg instance_template "${NEW_INSTANCE_TEMPLATE}" '{
@@ -1471,7 +1505,8 @@ gen_default_instance_template() {
     "networkInterfaces": [
       {
         "kind": "compute#networkInterface",
-        "network": ("projects/"+$project_id+"/global/networks/default"),
+        "network": ($vm_network),
+        "subnetwork": ($vm_subnetwork),
         "accessConfigs": [
           {
             "kind": "compute#accessConfig",
@@ -1525,9 +1560,9 @@ create_gce_instance_template() {
     INSTANCE_TEMPLATE_REQ="$(retry 2 run gcloud compute instance-templates \
       describe "${SOURCE_INSTANCE_TEMPLATE}" \
       --format=json \
-      --project="${PROJECT_ID}" \
+      --project="${VM_PROJECT_ID}" \
       | jq --arg name "${NEW_INSTANCE_TEMPLATE}" \
-      '.name=$name | .properties.disks[0].deviceName=$name' || true)"
+      '.name=$name | .properties.disks[].deviceName=$name' || true)"
 
     EXISTING_METADATA="$(echo "${INSTANCE_TEMPLATE_REQ}" \
       | jq '.properties.metadata.items')"
@@ -1543,11 +1578,11 @@ create_gce_instance_template() {
 
   # Create the instance template and get the creation operation.
   local TOKEN; TOKEN="$(retry 2 gcloud \
-    --project="${PROJECT_ID}" auth print-access-token)"
+    --project="${VM_PROJECT_ID}" auth print-access-token)"
 
   local RESPONSE
   RESPONSE="$(run curl -s -H "Content-Type: application/json" \
-    -XPOST "https://www.googleapis.com/compute/v1/projects/${PROJECT_ID}/global/instanceTemplates"\
+    -XPOST "https://www.googleapis.com/compute/v1/projects/${VM_PROJECT_ID}/global/instanceTemplates"\
     -d "${INSTANCE_TEMPLATE_REQ}" \
     -H @- <<EOF
 Authorization: Bearer ${TOKEN}
@@ -1566,12 +1601,12 @@ EOF
     # Wait and check if the creation is done.
     local RETVAL
     { watch_for_result 5 "^DONE$" gcloud compute operations describe "${OP_NAME}" \
-      --format="value(status)" --project="${PROJECT_ID}" >/dev/null; RETVAL="$?"; } || true
+      --format="value(status)" --project="${VM_PROJECT_ID}" >/dev/null; RETVAL="$?"; } || true
     if [[ "${RETVAL}" -ne 0 ]]; then
       { read -r -d '' MSG; fatal "${MSG}"; } <<EOF
 Unable to create GCE instance template ${NEW_INSTANCE_TEMPLATE}.
 Please check the details of the error:
-  gcloud compute operations describe "${OP_NAME}" --project="${PROJECT_ID}"
+  gcloud compute operations describe "${OP_NAME}" --project="${VM_PROJECT_ID}"
 EOF
     fi
   fi
@@ -1588,7 +1623,7 @@ To create a managed instance group from the instance template, run:
   --template ${NEW_INSTANCE_TEMPLATE}\
   --size <INSTANCE_GROUP_SIZE>\
   --zone <INSTANCE_GROUP_ZONE>\
-  --project ${PROJECT_ID}
+  --project ${VM_PROJECT_ID}
 *****************************
 "
 }
