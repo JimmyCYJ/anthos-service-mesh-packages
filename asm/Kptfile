@@ -121,6 +121,12 @@ openAPI:
         setter:
           name: anthos.servicemesh.hubMembershipID
           value: MEMBERSHIP_ID
+    io.k8s.cli.setters.anthos.servicemesh.hub-idp-url:
+      type: string
+      x-k8s-cli:
+        setter:
+          name: anthos.servicemesh.hub-idp-url
+          value: HUB_IDP_URL
     io.k8s.cli.setters.anthos.servicemesh.controlplane.validation-url:
       type: string
       x-k8s-cli:
@@ -285,12 +291,6 @@ openAPI:
           values:
           - marker: ENVIRON_PROJECT_ID
             ref: '#/definitions/io.k8s.cli.setters.gcloud.project.environProjectID'
-    io.k8s.cli.setters.anthos.servicemesh.hub-idp-url:
-      type: string
-      x-k8s-cli:
-        setter:
-          name: anthos.servicemesh.hub-idp-url
-          value: HUB_IDP_URL
     io.k8s.cli.substitutions.trust-domain-hub:
       type: string
       x-k8s-cli:
