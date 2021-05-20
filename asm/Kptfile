@@ -122,7 +122,6 @@ openAPI:
           name: anthos.servicemesh.hubMembershipID
           value: MEMBERSHIP_ID
     io.k8s.cli.setters.anthos.servicemesh.hub-idp-url:
-      type: string
       x-k8s-cli:
         setter:
           name: anthos.servicemesh.hub-idp-url
