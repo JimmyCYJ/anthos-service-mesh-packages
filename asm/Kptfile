@@ -290,7 +290,7 @@ openAPI:
       x-k8s-cli:
         setter:
           name: anthos.servicemesh.hub-idp-url
-          value: ""
+          value: HUB_IDP_URL
           isSet: true
     io.k8s.cli.substitutions.trust-domain-hub:
       type: string
